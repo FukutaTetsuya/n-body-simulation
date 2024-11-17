@@ -1,9 +1,7 @@
-#include<stdio.h>
-#include"hello_module.cu"
+#include"n_body_class.cuh"
 
 int main(){
-    printf("hello, world! from main\n");
-    hello();
-    hello_caller();
+    auto sim = Simulator::NBodySimulator();
+    sim.function();
     return 0;
 }

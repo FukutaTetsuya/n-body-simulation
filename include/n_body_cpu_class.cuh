@@ -80,23 +80,23 @@ public:
         } else{
             output_data = "{";
         }
-        output_data += "'t':" + std::to_string(step) + ",";
+        output_data += "\"t\":" + std::to_string(step) + ",";
 
-        output_data += "'x':[";
+        output_data += "\"x\":[";
         for(int i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[0][i]) + ",";
         }
         output_data += std::to_string(r[0][N - 1]) + "],";
 
-        output_data += "'y':[";
+        output_data += "\"y\":[";
         for(int i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[1][i]) + ",";
         }
         output_data += std::to_string(r[1][N - 1]) + "],";
 
-        output_data += "'z':[";
+        output_data += "\"z\":[";
         for(int i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[1][i]) + ",";

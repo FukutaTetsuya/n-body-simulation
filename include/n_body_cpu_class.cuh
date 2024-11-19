@@ -1,4 +1,5 @@
 #include<stdio.h>
+#include<fstream>
 #include<random>
 #include <memory>
 #include<string>
@@ -67,8 +68,50 @@ public:
         printf("cpu shot total energy\n");
         return;
     }
-    void dump_coordinate(void) const override{
+    void dump_coordinate(int step, std::string first_or_last_item = "neither") const override {
         printf("cpu dump coorinate\n");
+        std::string output_data = "";
+        // append
+        auto open_mode = std::ios::app;
+        if(first_or_last_item == "first") {
+            // discard existing file
+            open_mode = std::ios::out;
+            output_data = "[{";
+        } else{
+            output_data = "{";
+        }
+        output_data += "'t':" + std::to_string(step) + ",";
+
+        output_data += "'x':[";
+        for(int i = 0; i < N - 1; i++)
+        {
+            output_data += std::to_string(r[0][i]) + ",";
+        }
+        output_data += std::to_string(r[0][N - 1]) + "],";
+
+        output_data += "'y':[";
+        for(int i = 0; i < N - 1; i++)
+        {
+            output_data += std::to_string(r[1][i]) + ",";
+        }
+        output_data += std::to_string(r[1][N - 1]) + "],";
+
+        output_data += "'z':[";
+        for(int i = 0; i < N - 1; i++)
+        {
+            output_data += std::to_string(r[1][i]) + ",";
+        }
+        output_data += std::to_string(r[1][N - 1]) + "]";
+
+        if(first_or_last_item == "last") {
+            output_data += "}]\n";
+        } else {
+            output_data += "},\n";
+        }
+
+        std::ofstream file(coordinate_file_name, open_mode);
+        file << output_data;
+        file.close();
         return;
     }
     void ending(void) override{

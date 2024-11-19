@@ -7,13 +7,14 @@
 
 namespace SimulatorCPU{
 class NBodySimulatorCPU : public SimulatorBase::NBodySimulator {
+private:
+    std::unique_ptr<float[]> mass_dt;
 public:
     void initialize(int passed_N, float passed_dt, std::string file_name) override {
-        printf("cpu class initialize\n");
         coordinate_file_name = file_name;
         N = passed_N;
         dt = passed_dt;
-        mass = std::make_unique<float[]>(N);
+        mass_dt = std::make_unique<float[]>(N);
         for(int i = 0; i < 3; i++) {
             r[i] = std::make_unique<float[]>(N);
             v[i] = std::make_unique<float[]>(N);
@@ -39,10 +40,13 @@ public:
                     const float x = (float)i * init_distance + rand(engine);
                     const float y = (float)j * init_distance + rand(engine);
                     const float z = (float)k * init_distance + rand(engine);
-                    mass[n] = 1.0;
+                    mass_dt[n] = 1.0 * dt;
                     r[0][n] = x;
                     r[1][n] = y;
                     r[2][n] = z;
+                    v[0][n] = 0.0;
+                    v[1][n] = 0.0;
+                    v[2][n] = 0.0;
                     CoM_x += x;
                     CoM_y += y;
                     CoM_z += z;
@@ -57,19 +61,28 @@ public:
             r[1][i] -= CoM_y;
             r[2][i] -= CoM_z;
         }
+        update_accelaration();
         return;
     }
 
     void evolve_single_step(void) override{
-        printf("cpu evolve single step\n");
+        //update x += v*dt
+        update_coordinate();
+        //update v' += (a/2)*dt
+        update_velocity_half_step();
+        //update a = f(x)/m
+        update_accelaration();
+        //update v += (a/2)*dt
+        update_velocity_half_step();
         return;
     }
+
     void show_total_energy(void) const override{
         printf("cpu shot total energy\n");
         return;
     }
+     
     void dump_coordinate(int step, std::string first_or_last_item = "neither") const override {
-        printf("cpu dump coorinate\n");
         std::string output_data = "";
         // append
         auto open_mode = std::ios::app;
@@ -114,9 +127,66 @@ public:
         file.close();
         return;
     }
+    
     void ending(void) override{
         printf("cpu ending\n");
         return;
     }
+
+private:
+    void update_coordinate() {
+        for(int i = 0; i < N; i++) {
+            r[0][i] += v[0][i] * dt;
+            r[1][i] += v[1][i] * dt;
+            r[2][i] += v[2][i] * dt;
+        }
+        return;
+    }
+
+    void update_velocity_half_step() {
+        const float dt_half = dt * 0.5;
+        for(int i = 0; i < N; i++) {
+            v[0][i] += a[0][i] * dt_half;
+            v[1][i] += a[1][i] * dt_half;
+            v[2][i] += a[2][i] * dt_half;
+        }
+        return;
+    }
+
+    void update_accelaration() {
+        //reset a[0,1,2][0,...,N-1] = 0.0
+        for(int i = 0; i < N; i++) {
+            a[0][i] = 0.0;
+            a[1][i] = 0.0;
+            a[2][i] = 0.0;
+        }
+        //see all particle pair
+        for(int i = 0; i < N; i++) {
+            const float x = r[0][i];
+            const float y = r[1][i];
+            const float z = r[2][i];
+            const float mass_i_dt = mass_dt[i];
+            for(int j = 0; j < i; j++) {
+                const float mass_j_dt = mass_dt[j];
+                const float xij = r[0][j] - x;
+                const float yij = r[1][j] - y;
+                const float zij = r[2][j] - z;
+                const float dr_square = xij*xij + yij*yij + zij*zij;
+                const float dr_three_two = dr_square * std::sqrt(dr_square);
+                float dUdx = - xij / dr_three_two;
+                float dUdy = - yij / dr_three_two;
+                float dUdz = - zij / dr_three_two;
+                a[0][i] -= mass_j_dt * dUdx;
+                a[1][i] -= mass_j_dt * dUdy;
+                a[2][i] -= mass_j_dt * dUdz;
+                a[0][j] += mass_i_dt * dUdx;
+                a[1][j] += mass_i_dt * dUdy;
+                a[2][j] += mass_i_dt * dUdz;
+            }
+        }
+        return;
+    }
+
+
 };
 }

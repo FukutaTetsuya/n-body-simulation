@@ -171,7 +171,7 @@ private:
                 const float xij = r[0][j] - x;
                 const float yij = r[1][j] - y;
                 const float zij = r[2][j] - z;
-                const float dr_square = xij*xij + yij*yij + zij*zij;
+                const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
                 const float dr_three_two = dr_square * std::sqrt(dr_square);
                 float dUdx = - xij / dr_three_two;
                 float dUdy = - yij / dr_three_two;

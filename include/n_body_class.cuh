@@ -16,6 +16,7 @@ protected:
     
     int N;
     float dt;
+    const float softening_epsilon = 1.0 / (1024.0 * 1024.0 * 1024.0);
     std::string coordinate_file_name;
     FloatArray1D mass;
     FloatArray3D r;

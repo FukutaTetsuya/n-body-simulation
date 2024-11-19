@@ -1,4 +1,5 @@
 #include <memory>
+#include<string>
 
 namespace SimulatorBase{
 
@@ -7,14 +8,15 @@ using FloatArray3D = std::unique_ptr<float[]>[3];
 
 class NBodySimulator {
 protected:
-    virtual void initialize(int, float) = 0;
-    //virtual void evolve_single_step() = 0;
-    //virtual void show_total_energy() const = 0;
-    //virtual void dump_coordinate() const = 0;
-    //virtual void ending() = 0;
-private:
+    virtual void initialize(int, float, std::string) = 0;
+    virtual void evolve_single_step() = 0;
+    virtual void show_total_energy() const = 0;
+    virtual void dump_coordinate() const = 0;
+    virtual void ending() = 0;
+    
     int N;
     float dt;
+    std::string coordinate_file_name;
     FloatArray1D mass;
     FloatArray3D r;
     FloatArray3D v;

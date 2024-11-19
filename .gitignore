@@ -1,3 +1,5 @@
 .cache/
 .venv/
 build/
+data/history.txt
+data/*gif

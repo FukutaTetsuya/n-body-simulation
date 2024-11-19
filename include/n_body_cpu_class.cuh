@@ -10,9 +10,10 @@ class NBodySimulatorCPU : public SimulatorBase::NBodySimulator {
 private:
     std::unique_ptr<float[]> mass_dt;
 public:
-    void initialize(int passed_N, float passed_dt, std::string file_name) override {
+    void initialize(int passed_N, float passed_L, float passed_dt, std::string file_name) override {
         coordinate_file_name = file_name;
         N = passed_N;
+        L = passed_L;
         dt = passed_dt;
         mass_dt = std::make_unique<float[]>(N);
         for(int i = 0; i < 3; i++) {
@@ -23,12 +24,9 @@ public:
         std::random_device seed;
         std::mt19937 engine(seed());
         const int cbrt_N = (int)(std::cbrt((float)N)) + 1;
-        const float init_distance = 2.0;
-        const float init_rand_range = 0.1;
+        const float init_distance = L / (float)cbrt_N;
+        const float init_rand_range = init_distance * 0.1;
         std::uniform_real_distribution<float> rand(-init_rand_range, +init_rand_range);
-        double CoM_x = 0.0;
-        double CoM_y = 0.0;
-        double CoM_z = 0.0;
         for(int i = 0; i < cbrt_N; i++) {
             const int two_third_N = cbrt_N * cbrt_N;
             for(int j = 0; j < cbrt_N; j++) {
@@ -37,9 +35,15 @@ public:
                     if(n>=N) {
                         continue;
                     }
-                    const float x = (float)i * init_distance + rand(engine);
-                    const float y = (float)j * init_distance + rand(engine);
-                    const float z = (float)k * init_distance + rand(engine);
+                    float x = (float)i * init_distance + rand(engine);
+                    if(x < 0) { x += L; }
+                    if(x >= L) { x -= L; }
+                    float y = (float)j * init_distance + rand(engine);
+                    if(y < 0) { y += L; }
+                    if(y >= L) { y -= L; }
+                    float z = (float)k * init_distance + rand(engine);
+                    if(z < 0) { z += L; }
+                    if(z >= L) { z -= L; }
                     mass_dt[n] = 1.0 * dt;
                     r[0][n] = x;
                     r[1][n] = y;
@@ -47,19 +51,8 @@ public:
                     v[0][n] = 0.0;
                     v[1][n] = 0.0;
                     v[2][n] = 0.0;
-                    CoM_x += x;
-                    CoM_y += y;
-                    CoM_z += z;
                 }
             }
-        }
-        CoM_x /= (double)N;
-        CoM_y /= (double)N;
-        CoM_z /= (double)N;
-        for(int i = 0; i < N; i++) {
-            r[0][i] -= CoM_x;
-            r[1][i] -= CoM_y;
-            r[2][i] -= CoM_z;
         }
         update_accelaration();
         return;
@@ -129,7 +122,6 @@ public:
     }
     
     void ending(void) override{
-        printf("cpu ending\n");
         return;
     }
 
@@ -137,8 +129,14 @@ private:
     void update_coordinate() {
         for(int i = 0; i < N; i++) {
             r[0][i] += v[0][i] * dt;
+            if(r[0][i] < 0) { r[0][i] += L; }
+            if(r[0][i] >= L) { r[0][i] -= L; }
             r[1][i] += v[1][i] * dt;
+            if(r[1][i] < 0) { r[1][i] += L; }
+            if(r[1][i] >= L) { r[1][i] -= L; }
             r[2][i] += v[2][i] * dt;
+            if(r[2][i] < 0) { r[2][i] += L; }
+            if(r[2][i] >= L) { r[2][i] -= L; }
         }
         return;
     }
@@ -161,6 +159,8 @@ private:
             a[2][i] = 0.0;
         }
         //see all particle pair
+        const float half_L = L / 2.0;
+        const float _half_L = -half_L;
         for(int i = 0; i < N; i++) {
             const float x = r[0][i];
             const float y = r[1][i];
@@ -168,9 +168,15 @@ private:
             const float mass_i_dt = mass_dt[i];
             for(int j = 0; j < i; j++) {
                 const float mass_j_dt = mass_dt[j];
-                const float xij = r[0][j] - x;
-                const float yij = r[1][j] - y;
-                const float zij = r[2][j] - z;
+                float xij = r[0][j] - x;
+                if(xij > half_L) {xij -= L;}
+                if(xij <= _half_L) {xij += L;}
+                float yij = r[1][j] - y;
+                if(yij > half_L) {yij -= L;}
+                if(yij <= _half_L) {yij += L;}
+                float zij = r[2][j] - z;
+                if(zij > half_L) {zij -= L;}
+                if(zij <= _half_L) {zij += L;}
                 const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
                 const float dr_three_two = dr_square * std::sqrt(dr_square);
                 float dUdx = - xij / dr_three_two;

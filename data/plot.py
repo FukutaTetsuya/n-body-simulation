@@ -3,8 +3,8 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots()
-l_max = 10
-ax.set(aspect = "equal", xlim=[-l_max, +l_max], ylim=[-l_max, +l_max])
+l_max = 8
+ax.set(aspect = "equal", xlim=[0, +l_max], ylim=[0, +l_max])
 ims=[]
 
 with open("data/history.txt", "r") as file:

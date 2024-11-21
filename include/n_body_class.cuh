@@ -7,9 +7,7 @@ using FloatArray1D = std::unique_ptr<float[]>;
 using FloatArray3D = std::unique_ptr<float[]>[3];
 
 class NBodySimulator {
-    // N-Body simulation with
-    // Plummer model epsilon, and
-    // Periodic boundary condition
+    // N-Body simulation
 protected:
     virtual void initialize(int N, float L, float dt, std::string filename) = 0;
     virtual void evolve_single_step() = 0;
@@ -18,8 +16,11 @@ protected:
     virtual void ending() = 0;
     
     int N;
+    // L: length scale of system;
+    // L could be box size of periodic boundary
     float L;
     float dt;
+    // softening_epsilon can be plummer model epsilon
     const float softening_epsilon = 1.0 / (1024.0 * 1024.0 * 1024.0);
     std::string coordinate_file_name;
     FloatArray1D mass;

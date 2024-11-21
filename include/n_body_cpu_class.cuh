@@ -7,6 +7,12 @@
 
 namespace SimulatorCPU{
 class NBodySimulatorCPU : public SimulatorBase::NBodySimulator {
+    // CPU implementation of N-Body simulation with
+    // - Velocity-Verlet method
+    // - Checking all particle-particle pairs to know force
+    // - Periodic boundary condition
+    //   - but consider just the nearlest copy
+    // - Plummer model cutoff
 private:
     std::unique_ptr<float[]> mass_dt;
 public:
@@ -192,7 +198,5 @@ private:
         }
         return;
     }
-
-
 };
 }

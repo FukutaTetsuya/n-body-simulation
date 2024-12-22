@@ -7,3 +7,5 @@ add_compile_options($<COMPILE_LANGUAGE:CUDA>-arch=sm_89)
 add_subdirectory(include)
 target_link_libraries(${PROJECT_NAME} PUBLIC n_body_include)
 target_include_directories(${PROJECT_NAME} PUBLIC include)
+
+set(CMAKE_CXX_FLAGS "-Wall")

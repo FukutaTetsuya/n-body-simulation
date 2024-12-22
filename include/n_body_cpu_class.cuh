@@ -1,4 +1,4 @@
-#include<stdio.h>
+#include<iostream>
 #include<fstream>
 #include<random>
 #include <memory>
@@ -6,13 +6,13 @@
 #include "n_body_class.cuh"
 
 namespace SimulatorCPU{
-class NBodySimulatorCPU : public SimulatorBase::NBodySimulator {
-    // CPU implementation of N-Body simulation with
-    // - Velocity-Verlet method
-    // - Checking all particle-particle pairs to know force
-    // - Periodic boundary condition
-    //   - but consider just the nearlest copy
-    // - Plummer model cutoff
+class NBodySimulatorCPU_PP : public SimulatorBase::NBodySimulator {
+    // N体シミュレーションのCPU実装
+    // 手法は、
+    // - 時間発展は速度Verlet法
+    // - 相互作用はparticle-particle法。全粒子ペアの相互作用を直接計算する
+    // - 空間は周期境界条件を課すが、相互作用は最近接のコピーとのみ計算する
+    // - 0割り回避のためPlummer modelのカットオフを採用して分母にイプシロンを足す
 private:
     std::unique_ptr<float[]> mass_dt;
 public:

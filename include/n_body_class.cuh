@@ -9,7 +9,7 @@ using FloatArray3D = std::unique_ptr<float[]>[3];
 class NBodySimulator {
     // N-Body simulation
 protected:
-    virtual void initialize(int N, float L, float dt, std::string filename) = 0;
+    void initialize();
     virtual void evolve_single_step() = 0;
     virtual void show_total_energy() const = 0;
     virtual void dump_coordinate(int step, std::string first_or_last_item) const = 0;
@@ -21,7 +21,6 @@ protected:
     float L;
     float dt;
     // softening_epsilon can be plummer model epsilon
-    const float softening_epsilon = 1.0 / (1024.0 * 1024.0 * 1024.0);
     std::string coordinate_file_name;
     FloatArray1D mass;
     FloatArray3D r;

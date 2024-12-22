@@ -13,15 +13,19 @@ class NBodySimulatorCPU_PP : public SimulatorBase::NBodySimulator {
     // - 相互作用はparticle-particle法。全粒子ペアの相互作用を直接計算する
     // - 空間は周期境界条件を課すが、相互作用は最近接のコピーとのみ計算する
     // - 0割り回避のためPlummer modelのカットオフを採用して分母にイプシロンを足す
+    // 初期位置は格子点周りに少し乱数振っている
+    // 質量は1.0で固定している
 private:
-    std::unique_ptr<float[]> mass_dt;
+    float softening_epsilon;
+
 public:
-    void initialize(int passed_N, float passed_L, float passed_dt, std::string file_name) override {
+    void initialize(int given_N, float given_L, float given_epsilon,float given_dt, std::string file_name) {
         coordinate_file_name = file_name;
-        N = passed_N;
-        L = passed_L;
-        dt = passed_dt;
-        mass_dt = std::make_unique<float[]>(N);
+        N = given_N;
+        L = given_L;
+        softening_epsilon = given_epsilon;
+        dt = given_dt;
+        mass = std::make_unique<float[]>(N);
         for(int i = 0; i < 3; i++) {
             r[i] = std::make_unique<float[]>(N);
             v[i] = std::make_unique<float[]>(N);
@@ -50,7 +54,7 @@ public:
                     float z = (float)k * init_distance + rand(engine);
                     if(z < 0) { z += L; }
                     if(z >= L) { z -= L; }
-                    mass_dt[n] = 1.0 * dt;
+                    mass[n] = 1.0;
                     r[0][n] = x;
                     r[1][n] = y;
                     r[2][n] = z;
@@ -131,16 +135,20 @@ public:
         return;
     }
 
-protected:
+private:
     void update_coordinate() {
+        const float dt_square = dt * dt;
         for(int i = 0; i < N; i++) {
             r[0][i] += v[0][i] * dt;
+            r[0][i] += a[0][i] * dt_square;
             if(r[0][i] < 0) { r[0][i] += L; }
             if(r[0][i] >= L) { r[0][i] -= L; }
             r[1][i] += v[1][i] * dt;
+            r[1][i] += a[1][i] * dt_square;
             if(r[1][i] < 0) { r[1][i] += L; }
             if(r[1][i] >= L) { r[1][i] -= L; }
             r[2][i] += v[2][i] * dt;
+            r[2][i] += a[2][i] * dt_square;
             if(r[2][i] < 0) { r[2][i] += L; }
             if(r[2][i] >= L) { r[2][i] -= L; }
         }
@@ -171,9 +179,9 @@ protected:
             const float x = r[0][i];
             const float y = r[1][i];
             const float z = r[2][i];
-            const float mass_i_dt = mass_dt[i];
+            const float mass_i = mass[i];
             for(int j = 0; j < i; j++) {
-                const float mass_j_dt = mass_dt[j];
+                const float mass_j = mass[j];
                 float xij = r[0][j] - x;
                 if(xij > half_L) {xij -= L;}
                 if(xij <= _half_L) {xij += L;}
@@ -185,15 +193,17 @@ protected:
                 if(zij <= _half_L) {zij += L;}
                 const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
                 const float dr_three_two = dr_square * std::sqrt(dr_square);
+                // partial differential of potential U
                 float dUdx = - xij / dr_three_two;
                 float dUdy = - yij / dr_three_two;
                 float dUdz = - zij / dr_three_two;
-                a[0][i] -= mass_j_dt * dUdx;
-                a[1][i] -= mass_j_dt * dUdy;
-                a[2][i] -= mass_j_dt * dUdz;
-                a[0][j] += mass_i_dt * dUdx;
-                a[1][j] += mass_i_dt * dUdy;
-                a[2][j] += mass_i_dt * dUdz;
+                // gravity force is -1 * self mass * \nabla U
+                a[0][i] -= mass_j * dUdx;
+                a[1][i] -= mass_j * dUdy;
+                a[2][i] -= mass_j * dUdz;
+                a[0][j] += mass_i * dUdx;
+                a[1][j] += mass_i * dUdy;
+                a[2][j] += mass_i * dUdz;
             }
         }
         return;

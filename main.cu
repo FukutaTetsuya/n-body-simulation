@@ -4,11 +4,12 @@
 #include<iostream>
 
 int main(){
-    auto sim = SimulatorCPU::NBodySimulatorCPU();
+    auto sim = SimulatorCPU::NBodySimulatorCPU_PM();
     const unsigned int N = 512;
+    const int mesh_num= 64;
     const float box_size = std::cbrt((float)N);
     const float dt = 0.01;
-    const int total_steps = 10000;
+    const int total_steps = 10;
     const std::string output_file_name = "data/history.txt";
 
     std::cout << "N=" << N << std::endl;

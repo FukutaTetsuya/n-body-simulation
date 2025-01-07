@@ -245,6 +245,214 @@ private:
     }
 };
 
+class NBodySimulatorCPU_PP_OpenBC : public SimulatorBase::NBodySimulator {
+    // N体シミュレーションのCPU実装
+    // 手法は、
+    // - 時間発展は速度Verlet法
+    // - 相互作用はparticle-particle法。全粒子ペアの相互作用を直接計算する
+    // - 空間は開放境界条件 どこかに飛んで行った粒子はそのまま
+    // - 0割り回避のためPlummer modelのカットオフを採用 ポテンシャルを-1/sqrt(dr^2 + epsilon)とする
+    // 初期位置は格子点周りに少し乱数振っている
+    // 質量は1.0で固定している
+private:
+    float softening_epsilon;
+
+public:
+    void initialize(int given_N, float given_L, float given_epsilon, float given_dt, std::string file_name) {
+        coordinate_file_name = file_name;
+        N = given_N;
+        L = given_L;
+        softening_epsilon = given_epsilon;
+        dt = given_dt;
+        mass = std::make_unique<float[]>(N);
+        for(int i = 0; i < 3; i++) {
+            r[i] = std::make_unique<float[]>(N);
+            v[i] = std::make_unique<float[]>(N);
+            a[i] = std::make_unique<float[]>(N);
+        }
+        std::random_device seed;
+        std::mt19937 engine(seed());
+        std::uniform_real_distribution<float> rand(-L*0.5, +L*0.5);
+        for(int i = 0; i < N; i++) {
+            r[0][i] = rand(engine);
+            r[1][i] = rand(engine);
+            r[2][i] = rand(engine);
+            mass[i] = 1.0;
+            v[0][i] = 0.0;
+            v[1][i] = 0.0;
+            v[2][i] = 0.0;
+        }
+        update_accelaration();
+        return;
+    }
+
+    void evolve_single_step(void) override{
+        //update x += v*dt
+        update_coordinate();
+        //update v' += (a/2)*dt
+        update_velocity_half_step();
+        //update a = f(x)/m
+        update_accelaration();
+        //update v += (a/2)*dt
+        update_velocity_half_step();
+        return;
+    }
+
+    void show_total_energy(void) const override{
+        //see all particle pair
+        float total_U = 0.0;
+        for(int i = 0; i < N; i++) {
+            const float x = r[0][i];
+            const float y = r[1][i];
+            const float z = r[2][i];
+            const float mass_i = mass[i];
+            for(int j = 0; j < i; j++) {
+                //if(j==i) {continue;}
+                const float mass_j = mass[j];
+                float xij = r[0][j] - x;
+                float yij = r[1][j] - y;
+                float zij = r[2][j] - z;
+                const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
+                const float dr = std::sqrt(dr_square);
+                total_U -= 1.0 / dr;
+            }
+        }
+        float total_K = 0.0;
+        for(int i = 0; i < N; i++) {
+            const float vx = v[0][i];
+            const float vy = v[1][i];
+            const float vz = v[2][i];
+            const float half_mass = 0.5 * mass[i];
+            const float single_K = half_mass * (vx*vx + vy*vy + vz*vz);
+            total_K += single_K;
+        }
+        const float total_energy = total_U + total_K;
+        std::cout << "E,K,U," << total_energy << "," << total_U << "," << total_K << std::endl;
+        return;
+    }
+     
+    void dump_coordinate(int step, std::string first_or_last_item = "neither") const override {
+        std::string output_data = "";
+        // append
+        auto open_mode = std::ios::app;
+        if(first_or_last_item == "first") {
+            // discard existing file
+            open_mode = std::ios::out;
+            output_data = "[{";
+        } else{
+            output_data = "{";
+        }
+        output_data += "\"t\":" + std::to_string(step) + ",";
+
+        output_data += "\"x\":[";
+        for(int i = 0; i < N - 1; i++)
+        {
+            output_data += std::to_string(r[0][i]) + ",";
+        }
+        output_data += std::to_string(r[0][N - 1]) + "],";
+
+        output_data += "\"y\":[";
+        for(int i = 0; i < N - 1; i++)
+        {
+            output_data += std::to_string(r[1][i]) + ",";
+        }
+        output_data += std::to_string(r[1][N - 1]) + "],";
+
+        output_data += "\"z\":[";
+        for(int i = 0; i < N - 1; i++)
+        {
+            output_data += std::to_string(r[1][i]) + ",";
+        }
+        output_data += std::to_string(r[1][N - 1]) + "]";
+
+        if(first_or_last_item == "last") {
+            output_data += "}]\n";
+        } else {
+            output_data += "},\n";
+        }
+
+        std::ofstream file(coordinate_file_name, open_mode);
+        file << output_data;
+        file.close();
+        return;
+    }
+
+    void show_CoM(void) const {
+        double CoM[3] = {0.0, 0.0, 0.0};
+        for(int i = 0; i < N; i++) {
+            const float m = mass[i];
+            CoM[0] += (double)(m * r[0][i]);
+            CoM[1] += (double)(m * r[1][i]);
+            CoM[2] += (double)(m * r[2][i]);
+        }
+        std::cout << "CoM x,y,z = " << CoM[0] << "," << CoM[1] << "," << CoM[2] << std::endl;
+    }
+    
+    void ending(void) override{
+        return;
+    }
+
+private:
+    void update_coordinate() {
+        const float dt_square = dt * dt;
+        for(int i = 0; i < N; i++) {
+            r[0][i] += v[0][i] * dt;
+            r[0][i] += a[0][i] * dt_square;
+            r[1][i] += v[1][i] * dt;
+            r[1][i] += a[1][i] * dt_square;
+            r[2][i] += v[2][i] * dt;
+            r[2][i] += a[2][i] * dt_square;
+        }
+        return;
+    }
+
+    void update_velocity_half_step() {
+        const float dt_half = dt * 0.5;
+        for(int i = 0; i < N; i++) {
+            v[0][i] += a[0][i] * dt_half;
+            v[1][i] += a[1][i] * dt_half;
+            v[2][i] += a[2][i] * dt_half;
+        }
+        return;
+    }
+
+    void update_accelaration() {
+        //reset a[0,1,2][0,...,N-1] = 0.0
+        for(int i = 0; i < N; i++) {
+            a[0][i] = 0.0;
+            a[1][i] = 0.0;
+            a[2][i] = 0.0;
+        }
+        //see all particle pair
+        for(int i = 0; i < N; i++) {
+            const float x = r[0][i];
+            const float y = r[1][i];
+            const float z = r[2][i];
+            const float mass_i = mass[i];
+            for(int j = 0; j < i; j++) {
+                const float mass_j = mass[j];
+                float xij = r[0][j] - x;
+                float yij = r[1][j] - y;
+                float zij = r[2][j] - z;
+                const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
+                const float dr_three_two = dr_square * std::sqrt(dr_square);
+                // partial differential of potential U
+                float dUdx = - xij / dr_three_two;
+                float dUdy = - yij / dr_three_two;
+                float dUdz = - zij / dr_three_two;
+                // gravity force is -1 * self mass * \nabla U
+                a[0][i] -= mass_j * dUdx;
+                a[1][i] -= mass_j * dUdy;
+                a[2][i] -= mass_j * dUdz;
+                a[0][j] += mass_i * dUdx;
+                a[1][j] += mass_i * dUdy;
+                a[2][j] += mass_i * dUdz;
+            }
+        }
+        return;
+    }
+};
+
 class NBodySimulatorCPU_PM : public SimulatorBase::NBodySimulator {
     // N体シミュレーションのCPU実装
     // 手法は、

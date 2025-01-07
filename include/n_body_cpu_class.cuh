@@ -90,8 +90,7 @@ public:
             const float y = r[1][i];
             const float z = r[2][i];
             const float mass_i = mass[i];
-            for(int j = 0; j < N; j++) {
-                if(j==i) {continue;}
+            for(int j = 0; j < i; j++) {
                 const float mass_j = mass[j];
                 float xij = r[0][j] - x;
                 if(xij > half_L) {xij -= L;}

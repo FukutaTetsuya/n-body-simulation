@@ -12,7 +12,7 @@ class NBodySimulatorCPU_PP : public SimulatorBase::NBodySimulator {
     // - 時間発展は速度Verlet法
     // - 相互作用はparticle-particle法。全粒子ペアの相互作用を直接計算する
     // - 空間は周期境界条件を課すが、相互作用は最近接のコピーとのみ計算する
-    // - 0割り回避のためPlummer modelのカットオフを採用して分母にイプシロンを足す
+    // - 0割り回避のためPlummer modelのカットオフを採用 ポテンシャルを-1/sqrt(dr^2 + epsilon)とする
     // 初期位置は格子点周りに少し乱数振っている
     // 質量は1.0で固定している
 private:
@@ -81,7 +81,43 @@ public:
     }
 
     void show_total_energy(void) const override{
-        printf("cpu shot total energy\n");
+        //see all particle pair
+        const float half_L = L / 2.0;
+        const float _half_L = -half_L;
+        float total_U = 0.0;
+        for(int i = 0; i < N; i++) {
+            const float x = r[0][i];
+            const float y = r[1][i];
+            const float z = r[2][i];
+            const float mass_i = mass[i];
+            for(int j = 0; j < N; j++) {
+                if(j==i) {continue;}
+                const float mass_j = mass[j];
+                float xij = r[0][j] - x;
+                if(xij > half_L) {xij -= L;}
+                if(xij <= _half_L) {xij += L;}
+                float yij = r[1][j] - y;
+                if(yij > half_L) {yij -= L;}
+                if(yij <= _half_L) {yij += L;}
+                float zij = r[2][j] - z;
+                if(zij > half_L) {zij -= L;}
+                if(zij <= _half_L) {zij += L;}
+                const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
+                const float dr = std::sqrt(dr_square);
+                total_U -= 1.0 / dr;
+            }
+        }
+        float total_K = 0.0;
+        for(int i = 0; i < N; i++) {
+            const float vx = v[0][i];
+            const float vy = v[1][i];
+            const float vz = v[2][i];
+            const float half_mass = 0.5 * mass[i];
+            const float single_K = half_mass * (vx*vx + vy*vy + vz*vz);
+            total_K += single_K;
+        }
+        const float total_energy = total_U + total_K;
+        std::cout << "E,K,U," << total_energy << "," << total_U << "," << total_K << std::endl;
         return;
     }
      

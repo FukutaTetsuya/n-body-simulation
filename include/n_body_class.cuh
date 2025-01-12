@@ -16,11 +16,9 @@ protected:
     virtual void ending() = 0;
     
     int N;
-    // L: length scale of system;
-    // L could be box size of periodic boundary
+    // L: 初期化時の粒子分布の範囲だったり、周期境界条件のボックスサイズだったり
     float L;
     float dt;
-    // softening_epsilon can be plummer model epsilon
     std::string coordinate_file_name;
     FloatArray1D mass;
     FloatArray3D r;

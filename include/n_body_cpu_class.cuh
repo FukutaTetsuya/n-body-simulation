@@ -252,7 +252,7 @@ class NBodySimulatorCPU_PP_OpenBC : public SimulatorBase::NBodySimulator {
     // - 相互作用はparticle-particle法。全粒子ペアの相互作用を直接計算する
     // - 空間は開放境界条件 どこかに飛んで行った粒子はそのまま
     // - 0割り回避のためPlummer modelのカットオフを採用 ポテンシャルを-1/sqrt(dr^2 + epsilon)とする
-    // 初期位置は格子点周りに少し乱数振っている
+    // 初期位置は乱数
     // 質量は1.0で固定している
 private:
     float softening_epsilon;
@@ -314,7 +314,7 @@ public:
                 float zij = r[2][j] - z;
                 const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
                 const float dr = std::sqrt(dr_square);
-                total_U -= 1.0 / dr;
+                total_U -= mass_i * mass_j / dr;
             }
         }
         float total_K = 0.0;

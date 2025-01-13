@@ -1,4 +1,4 @@
-#include <cstdlib>
+#include<cstdint>
 #include<cuda_runtime.h>
 #include<curand.h>
 #include<iostream>
@@ -12,6 +12,7 @@
     }} while(0)
 
 namespace SimulatorGPU {
+using uint = std::uint32_t;
 namespace Kernels{
     __global__ void expand_coordinate(const int N, const float L, float* r) {
         const int index = blockIdx.x;
@@ -71,11 +72,11 @@ namespace Kernels{
             float yij = r[j+N] - y;
             float zij = r[j+2*N] - z;
             const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
-            const float dr_three_two = dr_square * sqrtf(dr_square);
+            const float inv_dr_three_two = 1.0 / (dr_square * sqrtf(dr_square));
             // ポテンシャルの偏微分に-1を掛けたもの
-            float dUdx = mass_j * xij / dr_three_two;
-            float dUdy = mass_j * yij / dr_three_two;
-            float dUdz = mass_j * zij / dr_three_two;
+            float dUdx = mass_j * xij * inv_dr_three_two;
+            float dUdy = mass_j * yij * inv_dr_three_two;
+            float dUdz = mass_j * zij * inv_dr_three_two;
             // 重力による加速度において自分の質量は相殺する
             a_x += dUdx;
             a_y += dUdy;

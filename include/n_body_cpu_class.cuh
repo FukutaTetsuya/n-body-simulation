@@ -1,3 +1,4 @@
+#include<cassert>
 #include<iostream>
 #include<fstream>
 #include<random>
@@ -7,6 +8,7 @@
 #include "n_body_class.cuh"
 
 namespace SimulatorCPU{
+using uint = std::uint32_t;
 class NBodySimulatorCPU_PP : public SimulatorBase::NBodySimulator {
     // N体シミュレーションのCPU実装
     // 手法は、
@@ -23,7 +25,9 @@ public:
     void initialize(int given_N, float given_L, float given_epsilon,float given_dt, std::string file_name) {
         coordinate_file_name = file_name;
         N = given_N;
+        assert(N > 0);
         L = given_L;
+        assert(L > 0.0);
         softening_epsilon = given_epsilon;
         dt = given_dt;
         mass = std::make_unique<float[]>(N);
@@ -34,15 +38,15 @@ public:
         }
         std::random_device seed;
         std::mt19937 engine(seed());
-        const int cbrt_N = (int)(std::cbrt((float)N)) + 1;
+        const uint cbrt_N = (int)(std::cbrt((float)N)) + 1;
         const float init_distance = L / (float)cbrt_N;
         const float init_rand_range = init_distance * 0.1;
         std::uniform_real_distribution<float> rand(-init_rand_range, +init_rand_range);
-        for(int i = 0; i < cbrt_N; i++) {
-            const int two_third_N = cbrt_N * cbrt_N;
-            for(int j = 0; j < cbrt_N; j++) {
-                for(int k = 0; k < cbrt_N; k++) {
-                    const int n = i * two_third_N + j * cbrt_N + k;
+        for(uint i = 0; i < cbrt_N; i++) {
+            const uint two_third_N = cbrt_N * cbrt_N;
+            for(uint j = 0; j < cbrt_N; j++) {
+                for(uint k = 0; k < cbrt_N; k++) {
+                    const uint n = i * two_third_N + j * cbrt_N + k;
                     if(n>=N) {
                         continue;
                     }
@@ -86,12 +90,12 @@ public:
         const float half_L = L / 2.0;
         const float _half_L = -half_L;
         float total_U = 0.0;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float x = r[0][i];
             const float y = r[1][i];
             const float z = r[2][i];
             const float mass_i = mass[i];
-            for(int j = 0; j < i; j++) {
+            for(uint j = 0; j < i; j++) {
                 const float mass_j = mass[j];
                 float xij = r[0][j] - x;
                 if(xij > half_L) {xij -= L;}
@@ -108,7 +112,7 @@ public:
             }
         }
         float total_K = 0.0;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float vx = v[0][i];
             const float vy = v[1][i];
             const float vz = v[2][i];
@@ -135,21 +139,21 @@ public:
         output_data += "\"t\":" + std::to_string(step) + ",";
 
         output_data += "\"x\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[0][i]) + ",";
         }
         output_data += std::to_string(r[0][N - 1]) + "],";
 
         output_data += "\"y\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[1][i]) + ",";
         }
         output_data += std::to_string(r[1][N - 1]) + "],";
 
         output_data += "\"z\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[1][i]) + ",";
         }
@@ -174,7 +178,7 @@ public:
 private:
     void update_coordinate() {
         const float dt_square = dt * dt;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             r[0][i] += v[0][i] * dt;
             r[0][i] += a[0][i] * dt_square;
             if(r[0][i] < 0) { r[0][i] += L; }
@@ -193,7 +197,7 @@ private:
 
     void update_velocity_half_step() {
         const float dt_half = dt * 0.5;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             v[0][i] += a[0][i] * dt_half;
             v[1][i] += a[1][i] * dt_half;
             v[2][i] += a[2][i] * dt_half;
@@ -203,7 +207,7 @@ private:
 
     void update_accelaration() {
         //reset a[0,1,2][0,...,N-1] = 0.0
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             a[0][i] = 0.0;
             a[1][i] = 0.0;
             a[2][i] = 0.0;
@@ -211,12 +215,12 @@ private:
         //see all particle pair
         const float half_L = L / 2.0;
         const float _half_L = -half_L;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float x = r[0][i];
             const float y = r[1][i];
             const float z = r[2][i];
             const float mass_i = mass[i];
-            for(int j = 0; j < i; j++) {
+            for(uint j = 0; j < i; j++) {
                 const float mass_j = mass[j];
                 float xij = r[0][j] - x;
                 if(xij > half_L) {xij -= L;}
@@ -262,7 +266,9 @@ public:
     void initialize(int given_N, float given_L, float given_epsilon, float given_dt, std::string file_name) {
         coordinate_file_name = file_name;
         N = given_N;
+        assert(N > 0);
         L = given_L;
+        assert(L > 0.0);
         softening_epsilon = given_epsilon;
         dt = given_dt;
         mass = std::make_unique<float[]>(N);
@@ -274,7 +280,7 @@ public:
         std::random_device seed;
         std::mt19937 engine(seed());
         std::uniform_real_distribution<float> rand(-L*0.5, +L*0.5);
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             r[0][i] = rand(engine);
             r[1][i] = rand(engine);
             r[2][i] = rand(engine);
@@ -302,12 +308,12 @@ public:
     void show_total_energy(void) const override{
         //see all particle pair
         float total_U = 0.0;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float x = r[0][i];
             const float y = r[1][i];
             const float z = r[2][i];
             const float mass_i = mass[i];
-            for(int j = 0; j < i; j++) {
+            for(uint j = 0; j < i; j++) {
                 //if(j==i) {continue;}
                 const float mass_j = mass[j];
                 float xij = r[0][j] - x;
@@ -319,7 +325,7 @@ public:
             }
         }
         float total_K = 0.0;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float vx = v[0][i];
             const float vy = v[1][i];
             const float vz = v[2][i];
@@ -346,21 +352,21 @@ public:
         output_data += "\"t\":" + std::to_string(step) + ",";
 
         output_data += "\"x\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[0][i]) + ",";
         }
         output_data += std::to_string(r[0][N - 1]) + "],";
 
         output_data += "\"y\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[1][i]) + ",";
         }
         output_data += std::to_string(r[1][N - 1]) + "],";
 
         output_data += "\"z\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[1][i]) + ",";
         }
@@ -380,7 +386,7 @@ public:
 
     void show_CoM(void) const {
         double CoM[3] = {0.0, 0.0, 0.0};
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float m = mass[i];
             CoM[0] += (double)(m * r[0][i]);
             CoM[1] += (double)(m * r[1][i]);
@@ -396,7 +402,7 @@ public:
 private:
     void update_coordinate() {
         const float dt_square = dt * dt;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             r[0][i] += v[0][i] * dt;
             r[0][i] += a[0][i] * dt_square;
             r[1][i] += v[1][i] * dt;
@@ -409,7 +415,7 @@ private:
 
     void update_velocity_half_step() {
         const float dt_half = dt * 0.5;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             v[0][i] += a[0][i] * dt_half;
             v[1][i] += a[1][i] * dt_half;
             v[2][i] += a[2][i] * dt_half;
@@ -419,18 +425,18 @@ private:
 
     void update_accelaration() {
         //reset a[0,1,2][0,...,N-1] = 0.0
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             a[0][i] = 0.0;
             a[1][i] = 0.0;
             a[2][i] = 0.0;
         }
         //see all particle pair
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float x = r[0][i];
             const float y = r[1][i];
             const float z = r[2][i];
             const float mass_i = mass[i];
-            for(int j = 0; j < i; j++) {
+            for(uint j = 0; j < i; j++) {
                 const float mass_j = mass[j];
                 float xij = r[0][j] - x;
                 float yij = r[1][j] - y;
@@ -476,8 +482,11 @@ public:
         std::cout << "init in PP class" << std::endl;
         coordinate_file_name = file_name;
         N = given_N;
+        assert(N > 0);
         L = given_L;
+        assert(L > 0.0);
         M = given_M;
+        assert(M > 0);
         dt = given_dt;
         M_size = L / (float)given_M;
         mass = std::make_unique<float[]>(N);
@@ -493,15 +502,15 @@ public:
         }
         std::random_device seed;
         std::mt19937 engine(seed());
-        const int cbrt_N = (int)(std::cbrt((float)N)) + 1;
+        const uint cbrt_N = (int)(std::cbrt((float)N)) + 1;
         const float init_distance = L / (float)cbrt_N;
         const float init_rand_range = init_distance * 0.1;
         std::uniform_real_distribution<float> rand(-init_rand_range, +init_rand_range);
-        for(int i = 0; i < cbrt_N; i++) {
+        for(uint i = 0; i < cbrt_N; i++) {
             const int two_third_N = cbrt_N * cbrt_N;
-            for(int j = 0; j < cbrt_N; j++) {
-                for(int k = 0; k < cbrt_N; k++) {
-                    const int n = i * two_third_N + j * cbrt_N + k;
+            for(uint j = 0; j < cbrt_N; j++) {
+                for(uint k = 0; k < cbrt_N; k++) {
+                    const uint n = i * two_third_N + j * cbrt_N + k;
                     if(n>=N) {
                         continue;
                     }
@@ -559,21 +568,21 @@ public:
         output_data += "\"t\":" + std::to_string(step) + ",";
 
         output_data += "\"x\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[0][i]) + ",";
         }
         output_data += std::to_string(r[0][N - 1]) + "],";
 
         output_data += "\"y\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[1][i]) + ",";
         }
         output_data += std::to_string(r[1][N - 1]) + "],";
 
         output_data += "\"z\":[";
-        for(int i = 0; i < N - 1; i++)
+        for(uint i = 0; i < N - 1; i++)
         {
             output_data += std::to_string(r[1][i]) + ",";
         }
@@ -598,7 +607,7 @@ public:
 protected:
     void update_coordinate() {
         const float dt_square = dt * dt;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             r[0][i] += v[0][i] * dt;
             r[0][i] += a[0][i] * dt_square;
             if(r[0][i] < 0) { r[0][i] += L; }
@@ -617,7 +626,7 @@ protected:
 
     void update_velocity_half_step() {
         const float dt_half = dt * 0.5;
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             v[0][i] += a[0][i] * dt_half;
             v[1][i] += a[1][i] * dt_half;
             v[2][i] += a[2][i] * dt_half;
@@ -629,10 +638,10 @@ protected:
         // 近似的な密度場を求める
         // 近傍8個の格子点に質量を割り振る方式
         auto lattice_point_lengths = std::vector<float>(M);
-        for(int i = 0; i < M; i++) {
+        for(uint i = 0; i < M; i++) {
             lattice_point_lengths[i] = (float)i * M_size;
         }
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float x = r[0][i];
             const float y = r[1][i];
             const float z = r[2][i];
@@ -672,9 +681,9 @@ protected:
 
         // k{x,y,z} = 0..M : 波数
         // n{x,y,z} = 0..M : 実空間の格子点のインデックス
-        for(int kx = 0; kx < M; kx++) {
-            for(int ky = 0; ky < M; ky++) {
-                for(int kz = 0; kz < M; kz++) {
+        for(uint kx = 0; kx < M; kx++) {
+            for(uint ky = 0; ky < M; ky++) {
+                for(uint kz = 0; kz < M; kz++) {
                     const int k_index = kx + ky*M + kz*M*M;
                     const float k_square = (float)(kx*kx + ky*ky + kz*kz);
                     if(k_square < 0.5) {
@@ -689,9 +698,9 @@ protected:
                     }
                     float density_DFT_Re = 0.0;
                     float density_DFT_Im = 0.0;
-                    for(int nx = 0; nx < M; nx++) {
-                        for(int ny = 0; ny < M; ny++) {
-                            for(int nz = 0; nz < M; nz++) {
+                    for(uint nx = 0; nx < M; nx++) {
+                        for(uint ny = 0; ny < M; ny++) {
+                            for(uint nz = 0; nz < M; nz++) {
                                 const float density_n = density[nx + ny*M + nz*M*M];
                                 const float theta = 2.0 * M_PI * (nx*kx + ny*ky + nz*kz) / (float)M;
                                 density_DFT_Re += density_n * std::cos(theta);
@@ -710,15 +719,15 @@ protected:
     void update_potential_field(void) {
         // ポテンシャルのDFTを逆DFTして実空間のポテンシャル場を求める
         const float theta_coefficient = -2.0 * M_PI / (float)M;
-        for(int nx = 0; nx < M; nx++) {
-            for(int ny = 0; ny < M; ny++) {
-                for(int nz = 0; nz < M; nz++) {
+        for(uint nx = 0; nx < M; nx++) {
+            for(uint ny = 0; ny < M; ny++) {
+                for(uint nz = 0; nz < M; nz++) {
                     const int n_index = nx + ny*M + nz*M*M;
                     float potential_Re = 0.0;
                     float potential_Im = 0.0;
-                    for(int kx = 0; kx < M; kx++) {
-                        for(int ky = 0; ky < M; ky++) {
-                            for(int kz = 0; kz < M; kz++) {
+                    for(uint kx = 0; kx < M; kx++) {
+                        for(uint ky = 0; ky < M; ky++) {
+                            for(uint kz = 0; kz < M; kz++) {
                                 const int k_index = kx + ky*M + kz*M*M;
                                 const float theta = theta_coefficient * (nx*kx + ny*ky + nz*kz);
                                 potential_Re += potential_DFT_Re[k_index] * std::cos(theta) - potential_DFT_Im[k_index] * std::sin(theta);
@@ -741,9 +750,9 @@ protected:
         // 実空間の格子点の重力場を求める
         // 周辺6点のポテンシャルの差分で定める
         const float gradient_coefficient = -1.0 / (2.0 * M_size);
-        for(int nx = 0; nx < M; nx++) {
-            for(int ny = 0; ny < M; ny++) {
-                for(int nz = 0; nz < M; nz++) {
+        for(uint nx = 0; nx < M; nx++) {
+            for(uint ny = 0; ny < M; ny++) {
+                for(uint nz = 0; nz < M; nz++) {
                     const int n_index = nx + ny*M + nz*M*M;
                     force_field[0][n_index] = gradient_coefficient * (potential_field[(nx+1)%M + ny*M + nz*M*M] - potential_field[(nx-1+M)%M + ny*M + nz*M*M]);
                     force_field[1][n_index] = gradient_coefficient * (potential_field[nx + ((ny+1)%M)*M + nz*M*M] - potential_field[nx + ((ny-1+M)%M)*M + nz*M*M]);
@@ -758,10 +767,10 @@ protected:
         // 粒子の加速度を求める
         // 近傍8点の重力場からの補完 密度場への割り当てと同じ係数
         auto lattice_point_lengths = std::vector<float>(M_size);
-        for(int i = 0; i < M; i++) {
+        for(uint i = 0; i < M; i++) {
             lattice_point_lengths[i] = i * M_size;
         }
-        for(int i = 0; i < N; i++) {
+        for(uint i = 0; i < N; i++) {
             const float x = r[0][i];
             const float y = r[1][i];
             const float z = r[2][i];
@@ -783,7 +792,7 @@ protected:
             const float z_diff_ratio_1 = 1.0 - z_diff_ratio;
 
             // 重力は粒子の質量に比例して加速度は逆比例なので相殺する 質量は登場しない
-            for(int axis = 0; axis < 3; axis++) {
+            for(uint axis = 0; axis < 3; axis++) {
                 float temp_a = 0.0;
                 temp_a += force_field[axis][x_index       + y_index*M         + z_index*M*M]         * x_diff_ratio_1 * y_diff_ratio_1 * z_diff_ratio_1;
                 temp_a += force_field[axis][(x_index+1)%M + y_index*M         + z_index*M*M]         * x_diff_ratio   * y_diff_ratio_1 * z_diff_ratio_1;

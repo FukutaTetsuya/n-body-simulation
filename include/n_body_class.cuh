@@ -15,7 +15,7 @@ protected:
     virtual void dump_coordinate(int step, std::string first_or_last_item) const = 0;
     virtual void ending() = 0;
     
-    int N;
+    unsigned int N;
     // L: 初期化時の粒子分布の範囲だったり、周期境界条件のボックスサイズだったり
     float L;
     float dt;

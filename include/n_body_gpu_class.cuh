@@ -16,14 +16,14 @@ using uint = std::uint32_t;
 namespace Kernels{
     __global__ void expand_coordinate(const int N, const float L, float* r) {
         const int index = blockIdx.x;
-        if(index >= N*3) {return;}
+        if(index >= N*4) {return;}
         r[index] = r[index] * L - L * 0.5;
         return;
     }
 
     __global__ void set_initial_velocity(const int N, float* v) {
         const int index = blockIdx.x;
-        if(index >= N*3) {return;}
+        if(index >= N*4) {return;}
         v[index] = 0.0;
         return;
     }
@@ -38,7 +38,7 @@ namespace Kernels{
     __global__ void update_coordinate(const int N, const float dt, float* r, float* v, float* a) {
         const float dt_square = dt * dt;
         const int index = blockIdx.x;
-        if(index >= 3*N) {return;}
+        if(index >= 4*N) {return;}
         r[index] += v[index] * dt;
         r[index] += a[index] * dt_square;
         return;
@@ -47,18 +47,17 @@ namespace Kernels{
     __global__ void update_velocity_half_step(const int N, const float dt, float* v, float* a) {
         const float dt_half = dt * 0.5;
         const int index = blockIdx.x;
-        if(index >= 3*N) {return;}
+        if(index >= 4*N) {return;}
         v[index] += a[index] * dt_half;
         return;
     }
 
     __global__ void update_accelaration(const int N, const float softening_epsilon, float* r, float* mass, float* a) {
-        const int index = blockIdx.x;
+        const int index = blockIdx.x * blockDim.x + threadIdx.x;
         if(index >= N) {return;}
-        // このアクセスよくないっすねえ
-        const int x_index = index;
-        const int y_index = index + N;
-        const int z_index = index + 2*N;
+        const int x_index = index*4;
+        const int y_index = x_index + 1;
+        const int z_index = x_index + 2;
         const float x = r[x_index];
         const float y = r[y_index];
         const float z = r[z_index];
@@ -68,9 +67,9 @@ namespace Kernels{
         for(int j = 0; j < N; j++) {
             if(j==index) {continue;}
             const float mass_j = mass[j];
-            float xij = r[j] - x;
-            float yij = r[j+N] - y;
-            float zij = r[j+2*N] - z;
+            const float xij = r[j*4] - x;
+            const float yij = r[j*4 + 1] - y;
+            const float zij = r[j*4 + 2] - z;
             const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
             const float inv_dr_three_two = 1.0 / (dr_square * sqrtf(dr_square));
             // ポテンシャルの偏微分に-1を掛けたもの
@@ -95,14 +94,14 @@ namespace Kernels{
         const float half_mass = 0.5 * mass[index];
         // ポテンシャルエネルギー
         float single_U = 0.0;
-        const float x = r[index];
-        const float y = r[index + N];
-        const float z = r[index + 2*N];
+        const float x = r[index*4];
+        const float y = r[index*4 + 1];
+        const float z = r[index*4 + 2];
         for(int j = 0; j < N; j++) {
             if(j==index) {continue;}
-            const float xij = r[j] - x;
-            const float yij = r[j+N] - y;
-            const float zij = r[j+2*N] - z;
+            const float xij = r[j*4] - x;
+            const float yij = r[j*4 + 1] - y;
+            const float zij = r[j*4 + 2] - z;
             const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
             const float dr = sqrtf(dr_square);
             single_U -= mass[j] / dr;
@@ -110,9 +109,9 @@ namespace Kernels{
         single_U *= half_mass;
 
         // 運動エネルギー
-        const float vx = v[index];
-        const float vy = v[index + N];
-        const float vz = v[index + 2*N];
+        const float vx = v[index*4];
+        const float vy = v[index*4 + 1];
+        const float vz = v[index*4 + 2];
         const float single_K = half_mass * (vx*vx + vy*vy + vz*vz);
 
         single_particle_energy[index] = single_U + single_K;
@@ -139,9 +138,9 @@ namespace Kernels{
         // 粒子数が少ないので単純なループ
         for(int i = 0; i < N; i++) {
             const float m = mass[i];
-            CoM[0] += (double)(m * r[i]);
-            CoM[1] += (double)(m * r[N + i]);
-            CoM[2] += (double)(m * r[2*N + i]);
+            CoM[0] += (double)(m * r[i*4]);
+            CoM[1] += (double)(m * r[i*4 + 1]);
+            CoM[2] += (double)(m * r[i*4 + 2]);
         }
         printf("CoM x,y,z = %f,%f,%f\n", CoM[0], CoM[1], CoM[2]);
         return;
@@ -164,7 +163,7 @@ private:
     float dt;
     std::string coordinate_file_name;
     float* mass;
-    float* r; // 3次元分まとめて格納 x_i = r[i], y_i = r[i+N], z_i = r[i+2N]
+    float* r; // 3次元分まとめて格納 コアレスアクセスを実現するため1次元余分に確保する x_i = r[i*4], y_i = r[i*4+1], z_i = r[i*4+2], r[i*4+3]には意味のない値が入る
     float* v; // 3次元分まとめて格納 インデックスはrと同じ
     float* a; // 3次元分まとめて格納 インデックスはrと同じ
     float* single_particle_energy;
@@ -179,11 +178,11 @@ public:
         softening_epsilon = given_epsilon;
         dt = given_dt;
         CUDA_CALL(cudaMalloc((void **)(&mass), N * sizeof(float)));
-        CUDA_CALL(cudaMalloc((void **)(&r), 3 * N * sizeof(float)));
-        CUDA_CALL(cudaMalloc((void **)(&v), 3 * N * sizeof(float)));
-        CUDA_CALL(cudaMalloc((void **)(&a), 3 * N * sizeof(float)));
+        CUDA_CALL(cudaMalloc((void **)(&r), 4 * N * sizeof(float)));
+        CUDA_CALL(cudaMalloc((void **)(&v), 4 * N * sizeof(float)));
+        CUDA_CALL(cudaMalloc((void **)(&a), 4 * N * sizeof(float)));
         CUDA_CALL(cudaMalloc((void **)(&single_particle_energy), N * sizeof(float)));
-        host_r = new float[3 * N];
+        host_r = new float[4 * N];
         set_initial_coordinate_velocity_mass();
         Kernels::update_accelaration<<<N,1,0,0>>>(N, softening_epsilon, r, mass, a);
         return;
@@ -200,14 +199,19 @@ public:
     }
 
     __host__ void evolve_single_step(void) {
+        const uint particle_per_block = 16;
+        const dim3 grid_dim = dim3((N + particle_per_block - 1) / particle_per_block, 1, 1);
+        const dim3 block_dim = dim3(particle_per_block, 1, 1);
+        const uint shared_memory_size_byte = particle_per_block * 4 * sizeof(float); // float4を使いたいので無駄を承知
+
         //update x += v*dt + (a/2)*dt^2
-        Kernels::update_coordinate<<<N*3,1,0,0>>>(N, dt, r, v, a);
+        Kernels::update_coordinate<<<N*4,1,0,0>>>(N, dt, r, v, a);
         //update v' += (a/2)*dt
-        Kernels::update_velocity_half_step<<<N*3,1,0,0>>>(N, dt, v, a);
+        Kernels::update_velocity_half_step<<<N*4,1,0,0>>>(N, dt, v, a);
         //update a = f(x)/m
-        Kernels::update_accelaration<<<N,1,0,0>>>(N, softening_epsilon, r, mass, a);
+        Kernels::update_accelaration<<<grid_dim,block_dim,0,0>>>(N, softening_epsilon, r, mass, a);
         //update v += (a/2)*dt
-        Kernels::update_velocity_half_step<<<N*3,1,0,0>>>(N, dt, v, a);
+        Kernels::update_velocity_half_step<<<N*4,1,0,0>>>(N, dt, v, a);
         return;
     }
 
@@ -221,7 +225,7 @@ public:
      
     __host__ void dump_coordinate(int step, std::string first_or_last_item = "neither") const {
         // ホストにコピー
-        cudaMemcpy((void *)host_r, (void *)r, 3 * N * sizeof(float), cudaMemcpyDeviceToHost);
+        cudaMemcpy((void *)host_r, (void *)r, 4 * N * sizeof(float), cudaMemcpyDeviceToHost);
         std::string output_data = "";
         // append
         auto open_mode = std::ios::app;
@@ -238,23 +242,23 @@ public:
         output_data += "\"x\":[";
         for(int i = 0; i < N - 1; i++)
         {
-            output_data += std::to_string(host_r[i]) + ",";
+            output_data += std::to_string(host_r[i*4]) + ",";
         }
-        output_data += std::to_string(host_r[N - 1]) + "],";
+        output_data += std::to_string(host_r[4*N - 4]) + "],";
 
         output_data += "\"y\":[";
-        for(int i = N; i < 2*N - 1; i++)
+        for(int i = 0; i < N - 1; i++)
         {
-            output_data += std::to_string(host_r[i]) + ",";
+            output_data += std::to_string(host_r[i*4 + 1]) + ",";
         }
-        output_data += std::to_string(host_r[2*N - 1]) + "],";
+        output_data += std::to_string(host_r[4*N - 3]) + "],";
 
         output_data += "\"z\":[";
-        for(int i = 2*N; i < 3*N - 1; i++)
+        for(int i = 0; i < N - 1; i++)
         {
-            output_data += std::to_string(host_r[i]) + ",";
+            output_data += std::to_string(host_r[i*4 + 2]) + ",";
         }
-        output_data += std::to_string(host_r[3*N - 1]) + "]";
+        output_data += std::to_string(host_r[4*N - 2]) + "]";
 
         if(first_or_last_item == "last") {
             // 最後の1回はlistを閉じる

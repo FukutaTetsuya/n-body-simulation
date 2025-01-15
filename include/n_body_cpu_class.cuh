@@ -442,11 +442,11 @@ private:
                 float yij = r[1][j] - y;
                 float zij = r[2][j] - z;
                 const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
-                const float dr_three_two = dr_square * std::sqrt(dr_square);
+                const float inv_dr_three_two = 1.0 / (dr_square * std::sqrt(dr_square));
                 // partial differential of potential U
-                float dUdx = - xij / dr_three_two;
-                float dUdy = - yij / dr_three_two;
-                float dUdz = - zij / dr_three_two;
+                float dUdx = - xij * inv_dr_three_two;
+                float dUdy = - yij * inv_dr_three_two;
+                float dUdz = - zij * inv_dr_three_two;
                 // gravity force is -1 * self mass * \nabla U
                 a[0][i] -= mass_j * dUdx;
                 a[1][i] -= mass_j * dUdy;

@@ -5,6 +5,8 @@
 #include<fstream>
 #include<stdio.h>
 #include<string>
+#include <vector_functions.h>
+#include <vector_types.h>
 
 #define CUDA_CALL(x) do {if((x) != cudaSuccess){\
     printf("Error at %s:%d\n",__FILE__,__LINE__);\
@@ -25,6 +27,13 @@ namespace Kernels{
         const int index = blockIdx.x;
         if(index >= N*4) {return;}
         v[index] = 0.0;
+        return;
+    }
+
+    __global__ void set_initial_acceleration(const int N, float* a) {
+        const int index = blockIdx.x;
+        if(index >= N*4) {return;}
+        a[index] = 0.0;
         return;
     }
 
@@ -52,38 +61,59 @@ namespace Kernels{
         return;
     }
 
-    __global__ void update_accelaration(const int N, const float softening_epsilon, float* r, float* mass, float* a) {
-        const int index = blockIdx.x * blockDim.x + threadIdx.x;
-        if(index >= N) {return;}
-        const int x_index = index*4;
-        const int y_index = x_index + 1;
-        const int z_index = x_index + 2;
-        const float x = r[x_index];
-        const float y = r[y_index];
-        const float z = r[z_index];
+    __global__ void update_accelaration(const int N, const float softening_epsilon, void* r, float* mass, void* a) {
+        const uint index = blockIdx.x * blockDim.x + threadIdx.x;
+        // index >= Nでも相手方の座標を拾ってくる任務があるためここではリターンしない
+        // 力の計算も行うが虚無である
+        const uint index_in_block = threadIdx.x;
+        const uint particle_per_block = blockDim.x;
+        float4* global_r = (float4*)r;
+        float4* global_a = (float4*)a;
+        float4 self_r = make_float4(0.0, 0.0, 0.0, 0.0);
+        if(index < N) {
+            self_r = global_r[index];
+        }
         float a_x = 0.0;
         float a_y = 0.0;
         float a_z = 0.0;
-        for(int j = 0; j < N; j++) {
-            if(j==index) {continue;}
-            const float mass_j = mass[j];
-            const float xij = r[j*4] - x;
-            const float yij = r[j*4 + 1] - y;
-            const float zij = r[j*4 + 2] - z;
-            const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
-            const float inv_dr_three_two = 1.0 / (dr_square * sqrtf(dr_square));
-            // ポテンシャルの偏微分に-1を掛けたもの
-            float dUdx = mass_j * xij * inv_dr_three_two;
-            float dUdy = mass_j * yij * inv_dr_three_two;
-            float dUdz = mass_j * zij * inv_dr_three_two;
-            // 重力による加速度において自分の質量は相殺する
-            a_x += dUdx;
-            a_y += dUdy;
-            a_z += dUdz;
+        extern __shared__ float4 shared_r[];
+        // タイルが相手方のN粒子を取りつくすまでのループ
+        for(uint i = 0; i < N; i += particle_per_block) {
+            // 座標をsmemにコピー
+            const uint fetch_index = i + index_in_block;
+            if(fetch_index < N) {
+                shared_r[index_in_block] = global_r[i + index_in_block];
+                // TODO 座標と質量をまとめて格納しておくとここで合理的だな
+                (shared_r[index_in_block]).w = mass[index];
+            } else {
+                shared_r[index_in_block] = make_float4(0.0, 0.0, 0.0, 0.0);
+            }
+            __syncthreads();
+            // smemにコピーした粒子との相互作用を計算
+            // ゼロ割回避のepsilonを入れているので、自分自身との力はゼロになる すべてのインデックスに対して計算してしまって構わない
+            // 相手粒子がなくても、質量にゼロを代入しているのでそのまま計算してかまわない
+            for(uint j = 0; j < particle_per_block; j++){
+                const float xij = shared_r[j].x - self_r.x;
+                const float yij = shared_r[j].y - self_r.y;
+                const float zij = shared_r[j].z - self_r.z;
+                const float mass_j = shared_r[j].w;
+                const float dr_square = xij*xij + yij*yij + zij*zij + softening_epsilon;
+                const float inv_dr_three_two = 1.0 / (dr_square * sqrtf(dr_square));
+                // ポテンシャルの偏微分に-1を掛けたもの
+                const float dUdx = mass_j * xij * inv_dr_three_two;
+                const float dUdy = mass_j * yij * inv_dr_three_two;
+                const float dUdz = mass_j * zij * inv_dr_three_two;
+                // 重力による加速度において自分の質量は相殺する
+                a_x += dUdx;
+                a_y += dUdy;
+                a_z += dUdz; 
+            }
+            __syncthreads();
         }
-        a[x_index] = a_x;
-        a[y_index] = a_y;
-        a[z_index] = a_z;
+        // 結果をglobalに返す
+        if(index < N) {
+            global_a[index] = make_float4(a_x, a_y, a_z, 0.0);
+        }
         return;
     }
 
@@ -184,7 +214,6 @@ public:
         CUDA_CALL(cudaMalloc((void **)(&single_particle_energy), N * sizeof(float)));
         host_r = new float[4 * N];
         set_initial_coordinate_velocity_mass();
-        Kernels::update_accelaration<<<N,1,0,0>>>(N, softening_epsilon, r, mass, a);
         return;
     }
 
@@ -209,7 +238,7 @@ public:
         //update v' += (a/2)*dt
         Kernels::update_velocity_half_step<<<N*4,1,0,0>>>(N, dt, v, a);
         //update a = f(x)/m
-        Kernels::update_accelaration<<<grid_dim,block_dim,0,0>>>(N, softening_epsilon, r, mass, a);
+        Kernels::update_accelaration<<<grid_dim,block_dim,shared_memory_size_byte,0>>>(N, softening_epsilon, (void *)r, mass, (void *)a);
         //update v += (a/2)*dt
         Kernels::update_velocity_half_step<<<N*4,1,0,0>>>(N, dt, v, a);
         return;
@@ -284,9 +313,10 @@ private:
         unsigned long long seed = 707;
         curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
         curandSetPseudoRandomGeneratorSeed(gen,seed);
-        curandGenerateUniform(gen, r, N*3);
-        Kernels::expand_coordinate<<<N*3,1,0,0>>>(N, L, r);
-        Kernels::set_initial_velocity<<<N*3,1,0,0>>>(N, v);
+        curandGenerateUniform(gen, r, N*4);
+        Kernels::expand_coordinate<<<N*4,1,0,0>>>(N, L, r);
+        Kernels::set_initial_velocity<<<N*4,1,0,0>>>(N, v);
+        Kernels::set_initial_acceleration<<<N*4,1,0,0>>>(N, a);
         Kernels::set_mass<<<N,1,0,0>>>(N, mass);
         curandDestroyGenerator(gen);
         return;

@@ -55,7 +55,7 @@ CPUコードをそのままcudaに置き換え、ループの最外周のみス�
 | 2048 | 7522,7554,7545 |
 | 4096 | 26600,26724,26794 |
 
-## GPU最適化その1
+## GPU最適化 自己流
 
 除算を減らす
 ```c++
@@ -70,9 +70,45 @@ float dUdx = mass_j * xij * inv_dr_three_two;
 | -- | ------- |
 | 2048 | 4762,4827,4803 |
 
-## GPU最適化 31.3.1
+## GPU最適化 GPU Gems
 
-`__device__`サブルーチンとの変数のやり取りに`float4`を使う：サブルーチンを使っていないのでスキップ
+### float4を使う準備としてメモリを余分に確保
 
-## GPU最適化 31.3.2
+```c++
+cudaMalloc((void **)(&r), 4 * N * sizeof(float));
+//...
+const float x = r[index*4];
+const float y = r[index*4 + 1];
+const float z = r[index*4 + 2];
+// etc.
+```
+さすがに遅くなるが猛烈にというわけではない
 
+| N | time[ms] |
+| -- | ------- |
+| 2048 | 4936,4943,5035 |
+
+### タイルを使う準備として力の計算にthread blockを利用
+
+```c++
+__host__ void evolve_single_step(void) {
+  //...
+  //Kernels::update_accelaration<<<N,1,0,0>>>(N, softening_epsilon, r, mass, a);
+  const dim3 grid_dim = dim3((N + particle_per_block - 1) / particle_per_block, 1, 1);
+  const dim3 block_dim = dim3(particle_per_block, 1, 1);
+  Kernels::update_accelaration<<<grid_dim,block_dim,0,0>>>(N, softening_epsilon, r, mass, a);
+  //...
+}
+
+__global__ void update_accelaration(const int N, const float softening_epsilon, float* r, float* mass, float* a) {
+  //const int index = blockIdx.x;
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  //...
+}
+```
+
+これだけで速くなるのはどういう理屈だったっけ
+
+| N | time[ms] |
+| -- | ------- |
+| 2048 | 2764,2732,2746 |

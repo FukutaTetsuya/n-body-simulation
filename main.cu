@@ -9,7 +9,7 @@ int main(){
     //auto sim = SimulatorCPU::NBodySimulatorCPU_PP();
     //auto sim = SimulatorCPU::NBodySimulatorCPU_PP_OpenBC();
     auto sim = SimulatorGPU::NBodySimulatorGPU_PP_OpenBC();
-    const unsigned int N = 2048;
+    const unsigned int N = 16384;
     const unsigned int mesh_num= 64;
     const float box_size = std::cbrt((float)N);
     const float softening_epsilon = box_size / 100.0;
@@ -33,6 +33,8 @@ int main(){
             //sim.show_CoM();
         }
     }
+    //sim.show_total_energy();
+    //sim.show_CoM();
     const auto end = std::chrono::system_clock::now();
     const auto time_milli = std::chrono::duration_cast<std::chrono::milliseconds>(end - st);
     std::cout << time_milli.count() << " [ms]/ " << total_steps << "steps" << std::endl;

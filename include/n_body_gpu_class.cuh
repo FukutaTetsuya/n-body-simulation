@@ -177,7 +177,7 @@ namespace Kernels{
     }
 
 };
-class NBodySimulatorGPU_PP_OpenBC {
+class NBodySimulatorGPU_PP {
     // N体シミュレーションのGPU実装
     // 手法は、
     // - 時間発展は速度Verlet法

@@ -7,9 +7,8 @@
 int main(){
     //auto sim = SimulatorCPU::NBodySimulatorCPU_PM();
     //auto sim = SimulatorCPU::NBodySimulatorCPU_PP();
-    //auto sim = SimulatorCPU::NBodySimulatorCPU_PP_OpenBC();
-    auto sim = SimulatorGPU::NBodySimulatorGPU_PP_OpenBC();
-    const unsigned int N = 16384;
+    auto sim = SimulatorGPU::NBodySimulatorGPU_PP();
+    const unsigned int N = 1024;
     const unsigned int mesh_num= 64;
     const float box_size = std::cbrt((float)N);
     const float softening_epsilon = box_size / 100.0;
